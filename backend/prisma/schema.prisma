@@ -1,0 +1,169 @@
+// ===========================================
+// Assistente Profissional - Schema do Banco de Dados
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Usuários (profissionais)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  profession String?
+  phone     String?
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  connections      Connection[]
+  messages         Message[]
+  autoReplySettings AutoReplySettings?
+  replies          Reply[]
+
+  @@map("users")
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// Configurações de resposta automática
+model AutoReplySettings {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  enabled     Boolean  @default(true)
+  message     String
+  startTime   String   @default("08:00") @map("start_time")
+  endTime     String   @default("18:00") @map("end_time")
+  activeDays  Int[]    @default([1, 2, 3, 4, 5]) @map("active_days") // 0=dom, 1=seg, ...
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auto_reply_settings")
+}
+
+// Conexões com serviços externos
+model Connection {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  provider     Provider
+  accessToken  String?   @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime? @map("expires_at")
+  metadata     Json?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([userId, provider])
+  @@map("connections")
+}
+
+enum Provider {
+  GMAIL
+  OUTLOOK
+  WHATSAPP
+}
+
+// Mensagens recebidas
+model Message {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  connectionId      String    @map("connection_id")
+  externalId        String?   @map("external_id") // ID no sistema original
+  source            Provider
+  senderName        String?   @map("sender_name")
+  senderContact     String?   @map("sender_contact") // email ou telefone
+  subject           String?
+  originalContent   String?   @map("original_content")
+  isAudio           Boolean   @default(false) @map("is_audio")
+  audioDurationSecs Int?      @map("audio_duration_secs")
+  audioUrl          String?   @map("audio_url")
+  transcription     String?
+  summary           String?
+  status            MessageStatus @default(UNREAD)
+  autoReplySent     Boolean   @default(false) @map("auto_reply_sent")
+  autoReplySentAt   DateTime? @map("auto_reply_sent_at")
+  receivedAt        DateTime  @map("received_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  replies    Reply[]
+
+  @@index([userId, status])
+  @@index([receivedAt(sort: Desc)])
+  @@map("messages")
+}
+
+enum MessageStatus {
+  UNREAD
+  READ
+  REPLIED
+  ARCHIVED
+}
+
+// Respostas enviadas
+model Reply {
+  id          String   @id @default(uuid())
+  messageId   String   @map("message_id")
+  userId      String   @map("user_id")
+  content     String
+  isAutoReply Boolean  @default(false) @map("is_auto_reply")
+  sentAt      DateTime @default(now()) @map("sent_at")
+
+  // Relacionamentos
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("replies")
+}
+
+// Jobs de processamento (para tracking)
+model ProcessingJob {
+  id          String       @id @default(uuid())
+  messageId   String?      @map("message_id")
+  type        JobType
+  status      JobStatus    @default(PENDING)
+  attempts    Int          @default(0)
+  error       String?
+  metadata    Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  completedAt DateTime?    @map("completed_at")
+
+  @@index([status])
+  @@map("processing_jobs")
+}
+
+enum JobType {
+  TRANSCRIBE_AUDIO
+  GENERATE_SUMMARY
+  SEND_AUTO_REPLY
+  SYNC_EMAILS
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}

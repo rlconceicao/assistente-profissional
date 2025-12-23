@@ -1,0 +1,91 @@
+# ===========================================
+# Docker Compose - Desenvolvimento Local
+# ===========================================
+# 
+# Uso:
+#   docker-compose up -d    # Inicia os serviços
+#   docker-compose down     # Para os serviços
+#   docker-compose logs -f  # Ver logs
+#
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # PostgreSQL
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: assistente-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: assistente_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Redis (para filas e cache)
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: assistente-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Redis Commander (interface web - opcional)
+  # ==========================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: assistente-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+  # ==========================================
+  # Adminer (interface web para PostgreSQL - opcional)
+  # ==========================================
+  adminer:
+    image: adminer:latest
+    container_name: assistente-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+
+# ==========================================
+# Redes
+# ==========================================
+networks:
+  default:
+    name: assistente-network
