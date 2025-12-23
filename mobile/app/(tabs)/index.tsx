@@ -2,7 +2,7 @@
 // Tela: Inbox de Mensagens
 // ===========================================
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Animated,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +35,11 @@ export default function InboxScreen() {
     fetchStats,
   } = useMessagesStore();
 
-  const { autoReply, fetchSettings, toggleAutoReply } = useSettingsStore();
+  const { autoReply, fetchSettings } = useSettingsStore();
+  const [showExpandedStats, setShowExpandedStats] = useState(false);
+
+  // Animation for auto-reply dot
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Carrega dados iniciais
   useEffect(() => {
@@ -42,6 +47,28 @@ export default function InboxScreen() {
     fetchStats();
     fetchSettings();
   }, []);
+
+  // Pulsing animation for auto-reply dot
+  useEffect(() => {
+    if (autoReply?.enabled) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [autoReply?.enabled]);
 
   // Pull to refresh
   const handleRefresh = useCallback(async () => {
@@ -64,20 +91,10 @@ export default function InboxScreen() {
     }
   }, []);
 
-  // Toggle auto-reply
-  const handleToggleAutoReply = useCallback(async () => {
-    try {
-      const enabled = await toggleAutoReply();
-      Alert.alert(
-        enabled ? 'Ativado' : 'Desativado',
-        enabled
-          ? 'Resposta automática ativada.'
-          : 'Resposta automática desativada.'
-      );
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível alterar a configuração.');
-    }
-  }, []);
+  // Handle bell icon press
+  const handleBellPress = useCallback(() => {
+    setShowExpandedStats(!showExpandedStats);
+  }, [showExpandedStats]);
 
   // Navigate to message detail
   const handleMessagePress = useCallback((message: Message) => {
@@ -87,61 +104,85 @@ export default function InboxScreen() {
   // Header component
   const renderHeader = () => (
     <View style={styles.header}>
-      {/* Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats?.todayCount || 0}</Text>
-          <Text style={styles.statLabel}>Hoje</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, stats?.unread ? styles.statHighlight : null]}>
-            {stats?.unread || 0}
+      {/* Title Row - Wireframe Style */}
+      <View style={styles.titleRow}>
+        <TouchableOpacity
+          style={styles.titleSection}
+          onPress={() => setShowExpandedStats(!showExpandedStats)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.title}>Resumos</Text>
+          <Text style={styles.subtitle}>
+            {stats?.todayCount || 0} {stats?.todayCount === 1 ? 'mensagem hoje' : 'mensagens hoje'}
           </Text>
-          <Text style={styles.statLabel}>Não lidas</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats?.repliedCount || 0}</Text>
-          <Text style={styles.statLabel}>Respondidas</Text>
-        </View>
+        </TouchableOpacity>
+
+        {/* Notification Bell with Badge */}
+        <TouchableOpacity
+          style={styles.bellButton}
+          onPress={handleBellPress}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.gray600} />
+          {stats?.unread > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>
+                {stats.unread > 9 ? '9+' : stats.unread}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Auto-reply status */}
-      <TouchableOpacity style={styles.autoReplyBanner} onPress={handleToggleAutoReply}>
+      {/* Collapsible Stats - Tap title to expand */}
+      {showExpandedStats && (
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{stats?.todayCount || 0}</Text>
+            <Text style={styles.statLabel}>Hoje</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, stats?.unread ? styles.statHighlight : null]}>
+              {stats?.unread || 0}
+            </Text>
+            <Text style={styles.statLabel}>Não lidas</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{stats?.repliedCount || 0}</Text>
+            <Text style={styles.statLabel}>Respondidas</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Auto-reply Status Banner - Read-only, navigates to settings */}
+      <TouchableOpacity
+        style={[
+          styles.autoReplyBanner,
+          autoReply?.enabled && styles.autoReplyBannerActive
+        ]}
+        onPress={() => router.push('/(tabs)/settings')}
+        activeOpacity={0.7}
+      >
         <View style={styles.autoReplyLeft}>
-          <View
+          <Animated.View
             style={[
               styles.autoReplyDot,
-              { backgroundColor: autoReply?.enabled ? colors.success : colors.gray400 },
+              autoReply?.enabled && styles.autoReplyDotActive,
+              {
+                transform: [{ scale: autoReply?.enabled ? pulseAnim : 1 }],
+              },
             ]}
           />
-          <Text style={styles.autoReplyText}>
+          <Text style={[
+            styles.autoReplyText,
+            autoReply?.enabled && styles.autoReplyTextActive
+          ]}>
             Resposta automática {autoReply?.enabled ? 'ativa' : 'inativa'}
           </Text>
         </View>
-        <Ionicons
-          name={autoReply?.enabled ? 'toggle' : 'toggle-outline'}
-          size={24}
-          color={autoReply?.enabled ? colors.success : colors.gray400}
-        />
-      </TouchableOpacity>
-
-      {/* Sync button */}
-      <TouchableOpacity
-        style={styles.syncButton}
-        onPress={handleSync}
-        disabled={isSyncing}
-      >
-        <Ionicons
-          name="sync"
-          size={20}
-          color={colors.primary}
-          style={isSyncing ? styles.spinning : null}
-        />
-        <Text style={styles.syncText}>
-          {isSyncing ? 'Sincronizando...' : 'Sincronizar Gmail'}
-        </Text>
+        <Ionicons name="chevron-forward" size={20} color={colors.gray300} />
       </TouchableOpacity>
     </View>
   );
@@ -196,6 +237,45 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
   },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleSection: {
+    flex: 1,
+  },
+  title: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    color: colors.textPrimary,
+  },
+  subtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  bellButton: {
+    position: 'relative',
+    padding: spacing.xs,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+  },
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: colors.white,
@@ -231,6 +311,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
   },
+  autoReplyBannerActive: {
+    backgroundColor: colors.successBg,
+  },
   autoReplyLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -240,27 +323,17 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: colors.gray400,
+  },
+  autoReplyDotActive: {
+    backgroundColor: colors.success,
   },
   autoReplyText: {
     fontSize: fontSize.sm,
     color: colors.textPrimary,
     fontWeight: fontWeight.medium,
   },
-  syncButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primaryBg,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-  },
-  syncText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: fontWeight.medium,
-  },
-  spinning: {
-    // TODO: Add rotation animation
+  autoReplyTextActive: {
+    color: colors.success,
   },
 });

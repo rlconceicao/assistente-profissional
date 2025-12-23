@@ -17,7 +17,7 @@ import {
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
-import { useMessagesStore } from '../../src/stores';
+import { useMessagesStore, useSettingsStore } from '../../src/stores';
 import { Avatar, SourceIcon, Card, Loading, Button } from '../../src/components/ui';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../src/theme';
 import type { MessageDetail } from '../../src/types';
@@ -30,6 +30,7 @@ export default function MessageDetailScreen() {
   const [isSending, setIsSending] = useState(false);
 
   const markAsRead = useMessagesStore((s) => s.markAsRead);
+  const autoReply = useSettingsStore((s) => s.autoReply);
 
   useEffect(() => {
     loadMessage();
@@ -157,8 +158,8 @@ export default function MessageDetailScreen() {
             {/* Audio Player (if audio) */}
             {message.isAudio && message.audioDurationSecs && (
               <View style={styles.audioPlayer}>
-                <TouchableOpacity style={styles.playButton}>
-                  <Ionicons name="play" size={20} color={colors.white} />
+                <TouchableOpacity style={styles.playButtonEnhanced}>
+                  <Ionicons name="volume-high-outline" size={20} color={colors.white} />
                 </TouchableOpacity>
                 <View style={styles.audioProgress}>
                   <View style={styles.progressBar}>
@@ -175,22 +176,37 @@ export default function MessageDetailScreen() {
             )}
 
             {/* Content Text */}
-            <Text style={styles.originalText}>
-              {message.transcription || message.originalContent || 'Conteúdo não disponível'}
-            </Text>
+            {message.isAudio && message.transcription ? (
+              <Text style={styles.transcriptionText}>
+                "{message.transcription}"
+              </Text>
+            ) : (
+              <Text style={styles.originalText}>
+                {message.originalContent || 'Conteúdo não disponível'}
+              </Text>
+            )}
           </Card>
 
           {/* Auto-reply confirmation */}
           {message.autoReplySent && message.autoReplySentAt && (
-            <View style={styles.autoReplyBox}>
-              <Ionicons name="checkmark-done" size={18} color={colors.success} />
-              <Text style={styles.autoReplyText}>
-                Resposta automática enviada às{' '}
-                {new Date(message.autoReplySentAt).toLocaleTimeString('pt-BR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
+            <View style={styles.autoReplyBoxEnhanced}>
+              <View style={styles.autoReplyHeader}>
+                <Ionicons name="checkmark-done" size={18} color={colors.success} />
+                <Text style={styles.autoReplyText}>
+                  Resposta automática enviada às{' '}
+                  {new Date(message.autoReplySentAt).toLocaleTimeString('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </View>
+
+              {/* Show the actual message sent */}
+              {autoReply?.message && (
+                <Text style={styles.autoReplyPreview}>
+                  "{autoReply.message}"
+                </Text>
+              )}
             </View>
           )}
 
@@ -347,6 +363,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  playButtonEnhanced: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
+  },
   audioProgress: {
     flex: 1,
   },
@@ -374,6 +399,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: fontSize.sm * 1.6,
   },
+  transcriptionText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    lineHeight: fontSize.sm * 1.6,
+  },
   autoReplyBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,10 +414,30 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
+  autoReplyBoxEnhanced: {
+    backgroundColor: colors.successBg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.success + '20',
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  autoReplyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   autoReplyText: {
     fontSize: fontSize.sm,
     color: colors.success,
     fontWeight: fontWeight.medium,
+  },
+  autoReplyPreview: {
+    fontSize: fontSize.sm,
+    color: colors.success,
+    fontStyle: 'italic',
+    lineHeight: fontSize.sm * 1.5,
+    marginTop: spacing.sm,
   },
   repliesSection: {
     marginTop: spacing.md,

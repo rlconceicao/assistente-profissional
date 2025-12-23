@@ -111,6 +111,8 @@ const styles = StyleSheet.create({
   },
   containerUnread: {
     backgroundColor: colors.primaryBg,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
   },
   content: {
     flex: 1,

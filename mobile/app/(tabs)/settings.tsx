@@ -2,23 +2,23 @@
 // Tela: Configurações
 // ===========================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Switch,
   TextInput,
   StyleSheet,
   Alert,
+  Animated,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useSettingsStore } from '../../src/stores';
 import { Card, Avatar, Button } from '../../src/components/ui';
 import { api } from '../../src/services/api';
-import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../src/theme';
+import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../src/theme';
 
 const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -29,6 +29,10 @@ export default function SettingsScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState('');
   const [connections, setConnections] = useState<any[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Animation for toggle switch
+  const toggleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchSettings();
@@ -40,6 +44,15 @@ export default function SettingsScreen() {
       setMessage(autoReply.message);
     }
   }, [autoReply]);
+
+  // Animate toggle switch
+  useEffect(() => {
+    Animated.spring(toggleAnim, {
+      toValue: autoReply?.enabled ? 1 : 0,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
+  }, [autoReply?.enabled]);
 
   const loadConnections = async () => {
     try {
@@ -127,10 +140,12 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Resposta Automática</Text>
 
         <Card>
-          {/* Enable/Disable */}
+          {/* Enable/Disable with Custom Toggle */}
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Ionicons name="chatbubble-outline" size={24} color={colors.primary} />
+              <View style={styles.iconContainer}>
+                <Ionicons name="chatbubble-outline" size={20} color={colors.success} />
+              </View>
               <View style={styles.settingText}>
                 <Text style={styles.settingLabel}>Ativar resposta automática</Text>
                 <Text style={styles.settingDescription}>
@@ -138,27 +153,43 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <Switch
-              value={autoReply?.enabled || false}
-              onValueChange={handleToggleEnabled}
-              trackColor={{ false: colors.gray300, true: colors.primaryLight }}
-              thumbColor={autoReply?.enabled ? colors.primary : colors.gray100}
-            />
+
+            {/* Custom Toggle - Wireframe Style */}
+            <TouchableOpacity
+              style={[
+                styles.toggleContainer,
+                autoReply?.enabled && styles.toggleContainerActive
+              ]}
+              onPress={() => handleToggleEnabled(!autoReply?.enabled)}
+              activeOpacity={0.8}
+            >
+              <Animated.View
+                style={[
+                  styles.toggleThumb,
+                  {
+                    transform: [{
+                      translateX: toggleAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [2, 22],
+                      }),
+                    }],
+                  },
+                ]}
+              />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Message */}
+          {/* Message Section - Simplified */}
           <View style={styles.messageSection}>
             <View style={styles.messageLabelRow}>
-              <Text style={styles.messageLabel}>Mensagem automática</Text>
-              <TouchableOpacity onPress={() => setIsEditing(!isEditing)}>
-                <Ionicons
-                  name={isEditing ? 'close' : 'pencil'}
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
+              <Text style={styles.messageLabel}>Mensagem automática:</Text>
+              {!isEditing && (
+                <TouchableOpacity onPress={() => setIsEditing(true)}>
+                  <Ionicons name="pencil" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {isEditing ? (
@@ -176,17 +207,19 @@ export default function SettingsScreen() {
                 <Button title="Salvar" onPress={handleSaveMessage} size="sm" />
               </View>
             ) : (
-              <Text style={styles.messagePreview}>
-                "{autoReply?.message || 'Nenhuma mensagem configurada'}"
-              </Text>
+              <View style={styles.messageDisplay}>
+                <Text style={styles.messagePreview}>
+                  "{autoReply?.message || 'Nenhuma mensagem configurada'}"
+                </Text>
+              </View>
             )}
           </View>
 
           <View style={styles.divider} />
 
-          {/* Working Hours */}
+          {/* Working Hours - Wireframe Style */}
           <View style={styles.hoursSection}>
-            <Text style={styles.hoursLabel}>Horário de funcionamento</Text>
+            <Text style={styles.hoursLabel}>Horário de funcionamento:</Text>
             <View style={styles.hoursRow}>
               <View style={styles.hourBox}>
                 <Ionicons name="time-outline" size={16} color={colors.gray400} />
@@ -200,28 +233,47 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          <View style={styles.divider} />
+          {/* Advanced Settings Toggle */}
+          <TouchableOpacity
+            style={styles.advancedToggle}
+            onPress={() => setShowAdvanced(!showAdvanced)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.advancedText}>Configurações avançadas</Text>
+            <Ionicons
+              name={showAdvanced ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.gray400}
+            />
+          </TouchableOpacity>
 
-          {/* Active Days */}
-          <View style={styles.daysSection}>
-            <Text style={styles.daysLabel}>Dias ativos</Text>
-            <View style={styles.daysRow}>
-              {DAYS_OF_WEEK.map((day, index) => {
-                const isActive = autoReply?.activeDays?.includes(index);
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.dayChip, isActive && styles.dayChipActive]}
-                    onPress={() => handleToggleDay(index)}
-                  >
-                    <Text style={[styles.dayText, isActive && styles.dayTextActive]}>
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+          {/* Collapsible Advanced Section */}
+          {showAdvanced && (
+            <>
+              <View style={styles.divider} />
+
+              {/* Active Days - Keep existing implementation */}
+              <View style={styles.daysSection}>
+                <Text style={styles.daysLabel}>Dias ativos</Text>
+                <View style={styles.daysRow}>
+                  {DAYS_OF_WEEK.map((day, index) => {
+                    const isActive = autoReply?.activeDays?.includes(index);
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[styles.dayChip, isActive && styles.dayChipActive]}
+                        onPress={() => handleToggleDay(index)}
+                      >
+                        <Text style={[styles.dayText, isActive && styles.dayTextActive]}>
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
         </Card>
       </View>
 
@@ -398,6 +450,34 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.successBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleContainer: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.gray300,
+    padding: 2,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  toggleContainerActive: {
+    backgroundColor: colors.success,
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    position: 'absolute',
+    ...shadows.sm,
+  },
   divider: {
     height: 1,
     backgroundColor: colors.gray100,
@@ -415,6 +495,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.textPrimary,
+  },
+  messageDisplay: {
+    backgroundColor: colors.gray50,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
   },
   messagePreview: {
     fontSize: fontSize.sm,
@@ -468,6 +553,18 @@ const styles = StyleSheet.create({
   hourSeparator: {
     fontSize: fontSize.sm,
     color: colors.textTertiary,
+  },
+  advancedToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginTop: spacing.xs,
+  },
+  advancedText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.medium,
   },
   daysSection: {
     gap: spacing.sm,
